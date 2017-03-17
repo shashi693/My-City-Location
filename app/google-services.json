@@ -1,0 +1,42 @@
+{
+  "project_info": {
+    "project_number": "970174014132",
+    "firebase_url": "https://my-city-location.firebaseio.com",
+    "project_id": "my-city-location",
+    "storage_bucket": "my-city-location.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:970174014132:android:f0e6e1113cc26bce",
+        "android_client_info": {
+          "package_name": "com.avenueinfotech.mycitylocation"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "970174014132-trvlo7g2rrp4m6n95k6amrql471vvfu7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBVDbwfIMPXO_9lyCY2cF49pSSTfITT_dM"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        },
+        "appinvite_service": {
+          "status": 1,
+          "other_platform_oauth_client": []
+        },
+        "ads_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
