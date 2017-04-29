@@ -1,57 +1,121 @@
 package com.avenueinfotech.mycitylocation;
 
 import android.Manifest;
+import android.app.Activity;
+import android.app.Dialog;
+import android.app.ProgressDialog;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentSender;
 import android.content.pm.PackageManager;
-import android.location.Address;
-import android.location.Geocoder;
+import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationManager;
+import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
-import android.text.Html;
+import android.text.TextUtils;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.avenueinfotech.mycitylocation.utils.GPSTracker;
+import com.google.android.gms.ads.AdListener;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.AdView;
+import com.google.android.gms.ads.InterstitialAd;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GoogleApiAvailability;
+import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
+import com.google.android.gms.common.GooglePlayServicesRepairableException;
 import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.PendingResult;
+import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.common.api.Status;
 import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.LocationSettingsRequest;
+import com.google.android.gms.location.LocationSettingsResult;
+import com.google.android.gms.location.LocationSettingsStates;
+import com.google.android.gms.location.LocationSettingsStatusCodes;
+import com.google.android.gms.location.places.Place;
+import com.google.android.gms.location.places.PlaceBuffer;
+import com.google.android.gms.location.places.PlaceLikelihood;
+import com.google.android.gms.location.places.PlaceLikelihoodBuffer;
+import com.google.android.gms.location.places.Places;
+import com.google.android.gms.location.places.ui.PlacePicker;
 
-import java.util.List;
-import java.util.Locale;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
-public class MainActivity extends AppCompatActivity implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
-    private GoogleApiClient mGoogleApiClient;
-    private LocationRequest mLocationRequest;
-    Button button;
-    Button butAddress;
-    TextView textView;
-    TextView address;
-    private static final int MY_PERMISSION_REQUEST_LOCATION = 1;
-    private TextView altitude;
-    private TextView latlng;
-//    private TextView tvCoordiante;
+public class MainActivity extends AppCompatActivity implements GoogleApiClient.OnConnectionFailedListener,
+        GoogleApiClient.ConnectionCallbacks, LocationListener {
 
-    ConnectionDetector cd;
+    InterstitialAd mInterstitialAd;
+    private InterstitialAd interstitial;
+
+    GoogleApiClient mGoogleApiClient;
+
+    private int PLACE_PICKER_REQUEST = 1;
+    private AutoCompleteAdapter mAdapter;
+
+    private TextView mTextView;
+    private AutoCompleteTextView mPredictTextView;
+
+
+    private Button btnShow;
+    private TextView addressView;
+
+    LocationManager locationManager;
+    String provider;
+    double lat = 0.0 , log=0.0;
+
+    private ProgressDialog dialog;
+    private static GPSTracker gps;
+    final int REQUEST_LOCATION = 199;
+    public final int REQUEST_ID_MULTIPLE_PERMISSIONS = 1;
+    String[] PERMISSIONS = {android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION, android.Manifest.permission.WRITE_EXTERNAL_STORAGE, android.Manifest.permission.READ_EXTERNAL_STORAGE};
+
+    private LocationRequest locationRequest;
+
+//    @Override
+//    protected void onResume() {
+//        super.onResume();
+//        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+//            return;
+//        }
+//        locationManager.requestLocationUpdates(provider,400,1, this);
+//    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+//        setContentView(R.layout.activity_main);
         MobileAds.initialize(getApplicationContext(), "ca-app-pub-1183672799205641~3514807417");
-//        EventBus.getDefault().register(this);
+
+        LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder()
+                .addLocationRequest(locationRequest);
+
+        if (googleServicesAvailable()) {
+            Toast.makeText(this, "Google services present", Toast.LENGTH_SHORT).show();
+            setContentView(R.layout.activity_main);
+
+        } else {
+            Toast.makeText(this, "Google services Absent", Toast.LENGTH_LONG).show();
+        }
 
         // Load an ad into the AdMob banner view.
         AdView adView = (AdView) findViewById(R.id.adView);
@@ -59,205 +123,353 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
                 .setRequestAgent("android_studio:ad_template").build();
         adView.loadAd(adRequest);
 
-        button = (Button)findViewById(R.id.button);
-        textView = (TextView)findViewById(R.id.textView);
-        butAddress =(Button)findViewById(R.id.butAddress);
-        address = (TextView)findViewById(R.id.address);
-//        altitude = (TextView)findViewById(R.id.altitude);
-        latlng = (TextView)findViewById(R.id.latlng);
-//        altitude = (TextView)findViewById(R.id.altitude);
+        // Prepare the Interstitial Ad
+        interstitial = new InterstitialAd(MainActivity.this);
+// Insert the Ad Unit ID
+        interstitial.setAdUnitId(getString(R.string.admob_interstitial_id));
 
-        callConnection();
-        initLocationRequest();
-
-        cd = new ConnectionDetector(this);
-
-        if (cd.isConnected()) {
-            Toast.makeText(MainActivity.this, "Connected", Toast.LENGTH_SHORT).show();
-        } else {
-            Toast.makeText(MainActivity.this, "Enable Internet & GPS for Information", Toast.LENGTH_LONG).show();
-        }
-//
-//            }
-
-
-
-        button.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-
-                if(ContextCompat.checkSelfPermission(MainActivity.this,
-                        android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED){
-                   if(ActivityCompat.shouldShowRequestPermissionRationale(MainActivity.this,
-                           android.Manifest.permission.ACCESS_COARSE_LOCATION)) {
-                       ActivityCompat.requestPermissions(MainActivity.this,
-                               new String[]{android.Manifest.permission.ACCESS_COARSE_LOCATION}, MY_PERMISSION_REQUEST_LOCATION);
-                   }
-
-                   } else {
-                    LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-                    Location location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-                    try{
-                        textView.setText(hereLocation(location.getLatitude(), location.getLongitude()));
-                    } catch (Exception e){
-                        e.printStackTrace();
-                        Toast.makeText(MainActivity.this, "Enable GPS & Internet", Toast.LENGTH_LONG).show();
-                    }
-                }
+        interstitial.loadAd(adRequest);
+// Prepare an Interstitial Ad Listener
+        interstitial.setAdListener(new AdListener() {
+            public void onAdLoaded() {
+                // Call displayInterstitial() function
+                displayInterstitial();
             }
         });
 
-        butAddress.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if(ContextCompat.checkSelfPermission(MainActivity.this,
-                        android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED){
-                    if(ActivityCompat.shouldShowRequestPermissionRationale(MainActivity.this,
-                            android.Manifest.permission.ACCESS_COARSE_LOCATION)) {
-                        ActivityCompat.requestPermissions(MainActivity.this,
-                                new String[]{android.Manifest.permission.ACCESS_COARSE_LOCATION}, MY_PERMISSION_REQUEST_LOCATION);
-                    }
+        mTextView = (TextView) findViewById(R.id.textview);
 
-                } else {
-                    LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-                    Location location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-                    try{
-                        address.setText(addressLocation(location.getLatitude(), location.getLongitude()));
-                    } catch (Exception e){
-                        e.printStackTrace();
-                        Toast.makeText(MainActivity.this, "Enable GPS & Internet", Toast.LENGTH_LONG).show();
-                    }
-                }
+        btnShow = (Button)findViewById(R.id.btnShow);
+        addressView = (TextView)findViewById(R.id.address);
+
+        mPredictTextView = (AutoCompleteTextView) findViewById(R.id.predicttextview);
+        mAdapter = new AutoCompleteAdapter(this);
+        mPredictTextView.setAdapter(mAdapter);
+
+        mPredictTextView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                AutoCompletePlace place = (AutoCompletePlace) parent.getItemAtPosition(position);
+                findPlaceById(place.getId());
             }
         });
 
-
-    }
-
-    private void callConnection() {
-        mGoogleApiClient = new GoogleApiClient.Builder(this)
-                .addOnConnectionFailedListener(this)
+        mGoogleApiClient = new GoogleApiClient
+                .Builder(this)
+                .enableAutoManage(this, 0, this)
+                .addApi(Places.GEO_DATA_API)
+                .addApi(Places.PLACE_DETECTION_API)
                 .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
                 .addApi(LocationServices.API)
                 .build();
-        mGoogleApiClient.connect();
-    }
 
-    private void initLocationRequest() {
-        mLocationRequest = new LocationRequest();
-        mLocationRequest.setInterval(5000);
-        mLocationRequest.setFastestInterval(2000);
-        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-    }
 
-    private void startLocationUpdate() {
-        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            return;
+
+        
+//        getLocation();
+
+        gps = new GPSTracker(this);
+
+        if(!hasPermissions(this, PERMISSIONS)){
+            ActivityCompat.requestPermissions(this, PERMISSIONS, REQUEST_ID_MULTIPLE_PERMISSIONS);
+        } else {
+
+            if (!gps.canGetLocation()) {
+                switchGPS();
+            }
+
+//            GeneralUtils.createDirectory();
         }
-        initLocationRequest();
-        LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, MainActivity.this);
+
+        dialog = new ProgressDialog(MainActivity.this);
+        dialog.setCancelable(false);
+
+        itadd();
+
+        getLocation();
     }
 
-    private void stopLocationUpdate(){
-        LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, MainActivity.this);
+    private void displayInterstitial() {
+
+        if (interstitial.isLoaded()) {
+            interstitial.show();
+        }
     }
 
-
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        switch (requestCode){
-            case MY_PERMISSION_REQUEST_LOCATION: {
-                if(grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED){
-                    if(ContextCompat.checkSelfPermission(MainActivity.this,
-                            android.Manifest.permission.ACCESS_COARSE_LOCATION)== PackageManager.PERMISSION_GRANTED){
-
-                        LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-                        Location location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-                        try{
-                            textView.setText(hereLocation(location.getLatitude(), location.getLongitude()));
-                            address.setText(hereLocation(location.getLatitude(), location.getLongitude()));
-                        } catch (Exception e){
-                            e.printStackTrace();
-                            Toast.makeText(MainActivity.this, "Not found", Toast.LENGTH_SHORT).show();
-                        }
-                    }
-                }else {
-                    Toast.makeText(this, "No permsiion granted", Toast.LENGTH_SHORT).show();
+    public static boolean hasPermissions(Context context, String... permissions) {
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && context != null && permissions != null) {
+            for (String permission : permissions) {
+                if (ActivityCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
+                    return false;
                 }
             }
         }
+        return true;
     }
 
+    public void switchGPS() {
+        {
+            LocationRequest locationRequest = LocationRequest.create();
+            locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+            locationRequest.setInterval(100000);
+            locationRequest.setFastestInterval(20 * 1000);
+            LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder()
+                    .addLocationRequest(locationRequest);
 
+            // **************************
+            builder.setAlwaysShow(true); // this is the key ingredient
+            // **************************
 
-    public String hereLocation(double lat, double lon){
-        String curCity = "";
-
-        Geocoder geocoder = new Geocoder(MainActivity.this, Locale.getDefault());
-        List<Address> addressList;
-        try{
-            addressList = geocoder.getFromLocation(lat, lon, 1);
-            if(addressList.size() > 0){
-                curCity = addressList.get(0).getAddressLine(0);
-            }
-
-        } catch (Exception e){
-            e.printStackTrace();
+            PendingResult<LocationSettingsResult> result = LocationServices.SettingsApi
+                    .checkLocationSettings(mGoogleApiClient, builder.build());
+            result.setResultCallback(new ResultCallback<LocationSettingsResult>() {
+                @Override
+                public void onResult(LocationSettingsResult result) {
+                    final Status status = result.getStatus();
+                    final LocationSettingsStates state = result
+                            .getLocationSettingsStates();
+                    switch (status.getStatusCode()) {
+                        case LocationSettingsStatusCodes.SUCCESS:
+                            // All location settings are satisfied. The client can
+                            // initialize location
+                            // requests here.
+                            break;
+                        case LocationSettingsStatusCodes.RESOLUTION_REQUIRED:
+                            // Location settings are not satisfied. But could be
+                            // fixed by showing the user
+                            // a dialog.
+                            try {
+                                // Show the dialog by calling
+                                // startResolutionForResult(),
+                                // and check the result in onActivityResult().
+                                status.startResolutionForResult(MainActivity.this, REQUEST_LOCATION);
+                            } catch (IntentSender.SendIntentException e) {
+                                // Ignore the error.
+                            }
+                            break;
+                        case LocationSettingsStatusCodes.SETTINGS_CHANGE_UNAVAILABLE:
+                            // Location settings are not satisfied. However, we have
+                            // no way to fix the
+                            // settings so we won't show the dialog.
+                            break;
+                    }
+                }
+            });
         }
-        return curCity;
-
-
-
     }
 
-    public String addressLocation(double lat, double lon){
-        String curAddress = "";
-
-        Geocoder geocoder = new Geocoder(MainActivity.this, Locale.getDefault());
-        List<Address> addressList;
-        try{
-            addressList = geocoder.getFromLocation(lat, lon, 3);
-            if(addressList.size() > 0){
-                curAddress = addressList.get(0).getAddressLine(1);
-            }
-
-        } catch (Exception e){
-            e.printStackTrace();
+    public boolean googleServicesAvailable() {
+        GoogleApiAvailability api = GoogleApiAvailability.getInstance();
+        int isAvailable = api.isGooglePlayServicesAvailable(this);
+        if (isAvailable == ConnectionResult.SUCCESS) {
+            return true;
+        } else if (api.isUserResolvableError(isAvailable)) {
+            Dialog dialog = api.getErrorDialog(this, isAvailable, 0);
+            dialog.show();
+        } else {
+            Toast.makeText(this, "Cant connect to play services", Toast.LENGTH_LONG).show();
         }
-        return curAddress;
-
-
-
+        return false;
     }
 
-    @Override
-    public void onConnected(@Nullable Bundle bundle) {
-        Log.i("LOG", "onConnection(" + bundle + ")");
+    private void getLocation() {
+        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        provider = locationManager.getBestProvider(new Criteria(), false);
 
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
-        Location l = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
-        if(l != null){
-            Log.i("LOG", "Lat: "+l.getLatitude());
-//            Log.i("LOG", "Log: "+l.getLongitude());
-            Log.i("Altiude", "Log: "+l.getAltitude());
-            latlng.setText("Latitude: "+l.getLatitude()+ "Longitude: "+l.getLongitude()+" | "+l.getAltitude());
-//            altitude.setText((int) l.getAltitude());
-            latlng.setText(Html.fromHtml("Latitude: "+l.getLatitude()+"<br />"+
-            "Longitude: "+l.getLongitude()+"<br />"+
-                "Bearing: "+l.getBearing()+"<br />"+
-                "Altitude: "+l.getAltitude()+"<br />"+
-                "Speed: "+l.getSpeed()+"<br />"+
-                "Provider: "+l.getProvider()+"<br />"+
-                "Accurucy: "+l.getAccuracy()+"<br />"
-            ));
+        final Location location = locationManager.getLastKnownLocation(provider);
+        if (location == null)
+            Log.e("ERROR", "Location is null");
+    }
+
+    private void itadd() {
+        //        callConnection();
+        btnShow.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (ActivityCompat.checkSelfPermission(getApplicationContext(), android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(getApplicationContext(), android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                    return;
+                }
+                Location myLocation = locationManager.getLastKnownLocation(provider);
+                lat = myLocation.getLatitude();
+                log = myLocation.getLongitude();
+
+                new GetAddress().execute(String.format("%.4f,%.4f",lat,log));
+            }
+        });
+    }
 
 
+
+    private class GetAddress extends AsyncTask<String, Void, String> {
+            ProgressDialog dialog = new ProgressDialog(MainActivity.this);
+
+     @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            dialog.setMessage("Please wait...");
+            dialog.setCanceledOnTouchOutside(true);
+            dialog.show();
         }
 
-        startLocationUpdate();
+    @Override
+    protected String doInBackground(String... strings) {
+        try {
+            double lat = Double.parseDouble(strings[0].split(",")[0]);
+            double log = Double.parseDouble(strings[0].split(",")[1]);
+            String response;
+            HttpDataHandler http = new HttpDataHandler();
+            String url = String.format("https://maps.googleapis.com/maps/api/geocode/json?latlng=%.4f,%.4f&sensor=false", lat, log);
+            response = http.GetHTTPData(url);
+            return response;
+        } catch (Exception ex) {
+
+        }
+        return null;
+    }
+
+
+    @Override
+    protected void onPostExecute(String s) {
+        try {
+            JSONObject jsonObject = new JSONObject(s);
+            String address = ((JSONArray) jsonObject.get("results")).getJSONObject(0).get("formatted_address").toString();
+            addressView.setText(address);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        if (dialog.isShowing())
+            dialog.dismiss();
+    }
+
+}
+
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (mGoogleApiClient != null)
+            mGoogleApiClient.connect();
+    }
+
+    @Override
+    protected void onStop() {
+        if (mGoogleApiClient != null && mGoogleApiClient.isConnected()) {
+            mAdapter.setGoogleApiClient(null);
+            mGoogleApiClient.disconnect();
+        }
+        super.onStop();
+    }
+
+    private void findPlaceById(String id) {
+        if (TextUtils.isEmpty(id) || mGoogleApiClient == null || !mGoogleApiClient.isConnected())
+            return;
+
+        Places.GeoDataApi.getPlaceById(mGoogleApiClient, id).setResultCallback(new ResultCallback<PlaceBuffer>() {
+            @Override
+            public void onResult(PlaceBuffer places) {
+                if (places.getStatus().isSuccess()) {
+                    Place place = places.get(0);
+                    displayPlace(place);
+                    mPredictTextView.setText("");
+                    mAdapter.clear();
+                }
+
+                //Release the PlaceBuffer to prevent a memory leak
+                places.release();
+            }
+        });
+    }
+
+    private void guessCurrentPlace() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        PendingResult<PlaceLikelihoodBuffer> result = Places.PlaceDetectionApi.getCurrentPlace(mGoogleApiClient, null);
+        result.setResultCallback( new ResultCallback<PlaceLikelihoodBuffer>() {
+            @Override
+            public void onResult( PlaceLikelihoodBuffer likelyPlaces ) {
+
+                PlaceLikelihood placeLikelihood = likelyPlaces.get( 0 );
+                String content = "";
+                if( placeLikelihood != null && placeLikelihood.getPlace() != null && !TextUtils.isEmpty( placeLikelihood.getPlace().getName() ) )
+                    content = "Most likely you are at: " + placeLikelihood.getPlace().getName() + "\n";
+                if( placeLikelihood != null )
+                    content += "Percent of being there: " + (int) ( placeLikelihood.getLikelihood() * 100 ) + "%";
+                mTextView.setText( content );
+
+                likelyPlaces.release();
+            }
+        });
+    }
+
+    private void displayPlacePicker() {
+        if( mGoogleApiClient == null || !mGoogleApiClient.isConnected() )
+            return;
+
+        PlacePicker.IntentBuilder builder = new PlacePicker.IntentBuilder();
+
+        try {
+            startActivityForResult( builder.build((Activity) getApplicationContext()), PLACE_PICKER_REQUEST );
+        } catch ( GooglePlayServicesRepairableException e ) {
+            Log.d( "PlacesAPI Demo", "GooglePlayServicesRepairableException thrown" );
+        } catch ( GooglePlayServicesNotAvailableException e ) {
+            Log.d( "PlacesAPI Demo", "GooglePlayServicesNotAvailableException thrown" );
+        }
+    }
+
+    protected void onActivityResult( int requestCode, int resultCode, Intent data ) {
+        if( requestCode == PLACE_PICKER_REQUEST && resultCode == RESULT_OK ) {
+            displayPlace( PlacePicker.getPlace( data, this ) );
+        }
+    }
+
+    private void displayPlace( Place place ) {
+        if( place == null )
+            return;
+
+        String content = "";
+        if( !TextUtils.isEmpty( place.getName() ) ) {
+            content += "Name: " + place.getName() + "\n";
+        }
+        if( !TextUtils.isEmpty( place.getAddress() ) ) {
+            content += "Address: " + place.getAddress() + "\n";
+        }
+        if( !TextUtils.isEmpty( place.getPhoneNumber() ) ) {
+            content += "Phone: " + place.getPhoneNumber();
+        }
+
+        mTextView.setText( content );
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu( Menu menu ) {
+        getMenuInflater().inflate( R.menu.menu_main, menu );
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected( MenuItem item ) {
+        int id = item.getItemId();
+
+        if( id == R.id.action_place_picker ) {
+            displayPlacePicker();
+            return true;
+        } else if( id == R.id.action_guess_current_place ) {
+            guessCurrentPlace();
+            return true;
+        }
+
+        return super.onOptionsItemSelected( item );
+    }
+
+    @Override
+    public void onConnected(@Nullable Bundle bundle) {
+
     }
 
     @Override
@@ -272,41 +484,12 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
 
     @Override
     public void onLocationChanged(Location location) {
-//            altitude.setText((int) +location.getAltitude());
-//        tvCoordiante.setText(Html.fromHtml("Location: "+location.getLatitude()+"<br />"+
-//                "Longitude: "+location.getLongitude()+"<br />"+
-//                "Bearing: "+location.getBearing()+"<br />"+
-//                "Altitude: "+location.getAltitude()+"<br />"+
-//                "Speed: "+location.getSpeed()+"<br />"+
-//                "Provider: "+location.getProvider()+"<br />"+
-//                "Accurucy: "+location.getAccuracy()+"<br />"+
-//                "Speed: "+ DateFormat.getTimeFormat(this).format(new Date())+"<br +>"
-//        ));
+        lat = location.getLatitude();
+        log = location.getLongitude();
+
+        new GetAddress().execute(String.format("%.4f,%.4f",lat,log));
     }
 
-//    protected void onActivityResult(int requestCode, int resultCode, Intent data){
-//        super.onActivityResult(requestCode, resultCode, data);
-//        if (requestCode == PLACE_PICKER_REQUEST) {
-//            if (requestCode == RESULT_OK){
-//                Place place = PlacePicker.getPlace(data, this);
-//                String toastMsg = String.format("Place: %s", place.getAddress());
-//                Toast.makeText(this, coastMsg, Toast.LENGTH_LONG).show();
-//                lat = place.getLatitude().latitude;
-//                lng = place.getLogitude().longitude;
-//
-//            }
-//        }
-//    }
-
-//    public void onEvent(final MessageEB m){
-//        runOnUiThread(new Runnable() {
-//            @Override
-//            public void run() {
-//                Log.i("LOG", m.getResultMessage());
-//                address.setText("Data: "+m.getResultMessage());
-//            }
-//        });
-//    }
 
 
 }

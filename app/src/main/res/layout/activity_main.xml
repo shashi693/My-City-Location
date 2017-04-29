@@ -13,106 +13,55 @@
     android:orientation="vertical"
     tools:context="com.avenueinfotech.mycitylocation.MainActivity">
 
+
+    <AutoCompleteTextView
+        android:layout_below="@+id/textview"
+        android:id="@+id/predicttextview"
+        android:layout_width="match_parent"
+        android:layout_height="1dp" />
+
     <!-- view for AdMob Banner Ad -->
+
+    <TextView
+        android:id="@+id/textview"
+        android:text="@string/default_place_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true"
+        android:layout_marginTop="168dp" />
+
+    <Button
+        android:text="Get Address"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/btnShow"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true" />
+
     <com.google.android.gms.ads.AdView
         android:id="@+id/adView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentTop="true"
-        android:layout_centerHorizontal="true"
         ads:adSize="BANNER"
-        ads:adUnitId="@string/banner_ad_unit_id" />
-
-
-    <TextView
-        android:text="Find in which place, town or city you are now"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="43dp"
-
-        android:id="@+id/textView2"
-        android:layout_above="@+id/button"
-        android:layout_centerHorizontal="true" />
-
-    <TextView
-        android:text=""
-        android:hint="Area"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginLeft="22dp"
-        android:layout_marginStart="22dp"
-        android:layout_marginTop="120dp"
-        android:id="@+id/textView"
-        android:textAppearance="@style/TextAppearance.AppCompat.Large"
-        android:layout_alignParentTop="true"
-        android:layout_alignLeft="@+id/button"
-        android:layout_alignStart="@+id/button" />
-
-    <TextView
-        android:text="locality"
-        android:hint="locality"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/butAddress"
-        android:layout_alignLeft="@+id/butAddress"
-        android:layout_alignStart="@+id/butAddress"
-        android:textAppearance="@style/TextAppearance.AppCompat.Large"
-        android:layout_marginTop="10dp"
-        android:id="@+id/address" />
+        ads:adUnitId="@string/banner_ad_unit_id"
+        android:layout_marginTop="29dp"
+        android:layout_below="@+id/btnShow"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true" />
 
     <TextView
         android:text=""
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="15dp"
-        android:layout_marginLeft="95dp"
-        android:id="@+id/latlng"
-        android:textAppearance="@style/TextAppearance.AppCompat.Small"
-        android:layout_alignTop="@+id/textView2"
-        android:layout_toEndOf="@+id/button"
-        android:layout_toRightOf="@+id/button" />
-
-    <Button
-        android:text="Get Place"
-        android:layout_width="wrap_content"
-        android:layout_height="20dp"
-        android:id="@+id/button"
-        android:background="#a1887f"
-        style="@style/Widget.AppCompat.Button.Small"
-        android:layout_below="@+id/textView"
-        android:layout_alignLeft="@+id/adView"
-        android:layout_alignStart="@+id/adView" />
-
-    <Button
-        android:text="Locality"
-        android:layout_width="wrap_content"
-        android:layout_height="20dp"
-        android:id="@+id/butAddress"
-        android:background="#a1887f"
-        android:layout_centerVertical="true"
-        android:layout_alignLeft="@+id/button"
-        android:layout_alignStart="@+id/button" />
+        android:id="@+id/address"
+        android:layout_marginLeft="19dp"
+        android:layout_marginStart="19dp"
+        android:layout_toRightOf="@+id/btnShow"
+        android:layout_toEndOf="@+id/btnShow"
+        android:layout_alignParentTop="true" />
 
 
-
-
-    <!--<TextView-->
-        <!--android:text="TextView"-->
-        <!--android:layout_width="wrap_content"-->
-        <!--android:layout_height="wrap_content"-->
-        <!--android:layout_marginTop="16dp"-->
-        <!--android:id="@+id/tv_coordinate"-->
-        <!--android:layout_below="@+id/address"-->
-        <!--android:layout_alignParentLeft="true"-->
-        <!--android:layout_alignParentStart="true" />-->
-    <!--<Button-->
-        <!--android:text="Altitude"-->
-        <!--android:layout_width="wrap_content"-->
-        <!--android:layout_height="15dp"-->
-        <!--android:id="@+id/butAltitude"-->
-        <!--android:background="#a1887f"-->
-        <!--android:layout_marginBottom="79dp"-->
-        <!--android:layout_alignParentBottom="true"-->
-        <!--android:layout_alignParentLeft="true"-->
-        <!--android:layout_alignParentStart="true" />-->
 </RelativeLayout>
